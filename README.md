@@ -21,5 +21,3 @@ No external database or connector access is required. Command-line tools such as
 - `CNV/`: GC- and chromosome-end-bias correction, joint read-depth and allele-fraction segmentation, baseline-ploidy and integer-copy-number assignment, final manual-call reconciliation, diploid chromosome-event summaries and Source Data export.
 
 No absolute personal paths are embedded in the shareable scripts. Repository-specific defaults may be overridden with the documented environment variables.
-
-Run `./validate_release.sh` before publication to check shell, Python, and R syntax.
