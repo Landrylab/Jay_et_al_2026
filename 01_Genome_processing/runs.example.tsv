@@ -1,0 +1,4 @@
+sample_id	run_id	library_id	flowcell	lane	read1	read2	trim_method
+isolate_01	run_01	library_01	FLOWCELL_A	1	path/to/run_01_R1.fastq.gz	path/to/run_01_R2.fastq.gz	trimmomatic
+isolate_01	run_02	library_01	FLOWCELL_B	2	path/to/run_02_R1.fastq.gz	path/to/run_02_R2.fastq.gz	trimmomatic
+isolate_02	run_03	library_02	FLOWCELL_C	1	path/to/run_03_R1.fastq.gz	path/to/run_03_R2.fastq.gz	fastp
