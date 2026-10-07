@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot ADMIXTURE replicate errors without rerunning model fitting."""
+"""Plot ADMIXTURE replicate errors."""
 from __future__ import annotations
 
 import argparse
@@ -70,7 +70,7 @@ def main():
     parser.add_argument("--source", type=Path, required=True, help="XLSX workbook, table directory, or a replicate TSV/CSV.")
     parser.add_argument("--table", default="ED1Data6", help="Named Excel Table or table-directory basename.")
     parser.add_argument("--output", type=Path, required=True, help="Output PDF, SVG, or PNG file.")
-    parser.add_argument("--highlight-k", type=int, help="Optional author-selected annotation; no knee is inferred.")
+    parser.add_argument("--highlight-k", type=int, help="Optional author-selected annotation.")
     parser.add_argument("--highlight-label", help="Text for the optional K annotation.")
     args = parser.parse_args()
     fig = plot_cv(read_source_table(args.source, args.table), args.highlight_k, args.highlight_label)

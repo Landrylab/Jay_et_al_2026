@@ -206,7 +206,7 @@ def plot_grouped(cohorts, metrics, summary, totals, prefix, dpi=300):
     report = {"backgrounds": len(groups), "isolates": int(cohorts.Isolates.sum()), "folds": len(folds),
               "repeats": int(metrics.Repeat.nunique()), "feature_sets": models,
               "metric_rows": len(metrics), "dimensions_mm": [width, height],
-              "whiskers": "Minimum–maximum of defined repeat values, not confidence intervals"}
+              "whiskers": "Minimum–maximum of defined repeat values"}
     Path(str(prefix) + ".summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report
 
@@ -369,7 +369,7 @@ def plot_within(cohorts, metrics, importance, chromosomes, highlights, prefix, d
     pd.DataFrame(box_rows).to_csv(str(prefix) + ".box_summary.tsv", sep="\t", index=False, na_rep="NA", float_format="%.17g")
     report = {"backgrounds": len(groups), "feature_sets": models, "metric_names": metric_names,
               "dimensions_mm": [180, height], "chromosome_gap_bp": chromosome_gap, "panels": panel_rows,
-              "importance": "Supplied mean Gini importance, without rescaling or feature filtering",
+              "importance": "Supplied mean Gini importance",
               "boxplot": "Linear-interpolation quartiles; whiskers to observations within 1.5 IQR; every defined fold shown"}
     Path(str(prefix) + ".summary.json").write_text(json.dumps(report, indent=2) + "\n")
     return report

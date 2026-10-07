@@ -1,6 +1,6 @@
 # Phylogeny and population structure
 
-These scripts prepare phylogenetic and PCA inputs, compare population clusters with sample annotations, and render figures from supplied numeric tables. Set paths and expected input dimensions for the dataset being analysed. Plotting saved sources does not require rerunning sequence processing, clustering or ADMIXTURE.
+These scripts prepare phylogenetic and PCA inputs, compare population clusters with sample annotations, and render figures from supplied numeric tables. Set paths and expected input dimensions for the dataset being analysed.
 
 ## Dependencies
 
@@ -23,7 +23,7 @@ Analysis: BCFtools/HTSlib, PLINK, IQ-TREE, ADMIXTURE, Python with `pysam`, `pand
 
 ## Cluster-label exports
 
-Run the descriptive export without rerunning clustering or association tests:
+Run the descriptive export:
 
 ```sh
 Rscript 08_compare_clusters_to_labels.R \
@@ -55,9 +55,9 @@ python 12_plot_clade_overlap.py \
   --output outputs/clade_overlap.pdf
 ```
 
-Use `.pdf`, `.svg` or `.png` for `--output`. Output directories are created as needed. The inputs are read without modification. These entrypoints reproduce the plotted numeric content and annotations; typography can differ across systems. They do not select K, infer clades, refit a tree, or calculate new ancestry estimates.
+Use `.pdf`, `.svg` or `.png` for `--output`. Output directories are created as needed. The inputs are read without modification. These entrypoints reproduce the plotted numeric content and annotations; typography can differ across systems.
 
-The CV plot reads named Excel Table `ED1Data6`: `K`, `Replicate`, `Cross-validation error`. It also accepts a standalone TSV/CSV with those headers, or the analysis headers `K`, `replicate`, `cv_error`. Each K/replicate pair must occur once. Boxes show the interquartile range and median; whiskers extend to observed values within 1.5 times the interquartile range. All runs are drawn as points, including outliers, and the orange line connects the lowest error per K. An optional `--highlight-k` integer and `--highlight-label` string add an author-selected annotation; no knee-selection procedure is performed. No K or input cohort size is assumed by the plotter.
+The CV plot reads named Excel Table `ED1Data6`: `K`, `Replicate`, `Cross-validation error`. It also accepts a standalone TSV/CSV with those headers, or the analysis headers `K`, `replicate`, `cv_error`. Each K/replicate pair must occur once. Boxes show the interquartile range and median; whiskers extend to observed values within 1.5 times the interquartile range. All runs are drawn as points, including outliers, and the orange line connects the lowest error per K. An optional `--highlight-k` integer and `--highlight-label` string add an author-selected annotation.
 
 The clade plot uses these named Excel Tables:
 

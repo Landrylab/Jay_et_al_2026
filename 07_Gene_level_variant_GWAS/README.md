@@ -31,7 +31,7 @@ python3 05_summarize_gene_results.py \
 
 The full and LOCO matrices are produced once by `06_Variant_GWAS/02_build_relationship_matrix.py` from the shared LD-pruned nuclear SNP file. Nuclear genes use the matrix excluding their own chromosome. Mitochondrial genes use the full nuclear matrix. GCTA fits null REML variance components separately per drug/chromosome. Intercept, quantitative phenotype handling, mean imputation and variant-effect testing follow variant GWAS.
 
-Bonferroni and suggestive thresholds use 0.05/M and 1/M, with M the number of tested genes across all chromosomes for each drug. Lambda GC is `median((b/se)^2)/0.45493642311957275`. No P-value rescaling is performed.
+Bonferroni and suggestive thresholds use 0.05/M and 1/M, with M the number of tested genes across all chromosomes for each drug. Lambda GC is `median((b/se)^2)/0.45493642311957275`.
 
 ```bash
 python3 06_plot_gene_gwas.py \

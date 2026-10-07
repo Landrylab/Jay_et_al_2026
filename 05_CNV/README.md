@@ -115,7 +115,7 @@ Ten-kb aggregation requires at least 70% of available, called 1-kb bins to suppo
 
 ## Ploidy-validation figure
 
-`09_plot_ploidy_validation.py` draws one row per supplied isolate, with allele-fraction density, absolute copy number above minor-allele fraction, and a FACS histogram against a supplied reference recording. An optional final panel shows chromosome-specific aneuploidy composition. The command reads prepared numerical values and does not run segmentation, infer ploidy, apply FACS gates or recalculate density estimates. Install the plotting dependencies listed in `../plotting_requirements.txt`.
+`09_plot_ploidy_validation.py` draws one row per supplied isolate, with allele-fraction density, absolute copy number above minor-allele fraction, and a FACS histogram against a supplied reference recording. An optional final panel shows chromosome-specific aneuploidy composition. The command reads prepared numerical values. Install the plotting dependencies listed in `../plotting_requirements.txt`.
 
 ```bash
 python3 09_plot_ploidy_validation.py \

@@ -149,7 +149,7 @@ def main():
         scores.groupby(["input_key", "cluster"])[list(METRICS)].agg(["mean", "std"]).to_csv(args.outdir / "held_out_group_summary.tsv", sep="\t")
     plot(metrics, curves, args.outdir, args.dpi)
     (args.outdir / "plot_info.json").write_text(json.dumps({"results_root": str(args.results_root.resolve()),
-        "outer_fold_records": len(metrics), "roc_grid_points": 501, "roc_band": "Across-fold sample standard deviation; not a confidence interval"}, indent=2) + "\n")
+        "outer_fold_records": len(metrics), "roc_grid_points": 501, "roc_band": "Across-fold sample standard deviation"}, indent=2) + "\n")
 
 
 if __name__ == "__main__":

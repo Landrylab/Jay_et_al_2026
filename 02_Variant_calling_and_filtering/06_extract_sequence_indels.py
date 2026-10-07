@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 r"""Represent sequence indel ALTs as diploid target-allele dosages in PLINK BED.
 
-Multiallelic records are split without reference-driven normalization or
-realignment. Each allele retains its original coordinate and parent-record
+Multiallelic records are split. Each allele retains its original coordinate and parent-record
 identity. Other called ALTs represent zero copies of the target allele;
-partially missing and non-diploid calls are missing. No missingness, frequency
-or carrier-count filters are applied.
+partially missing and non-diploid calls are missing.
 
 Example:
   python 06_extract_sequence_indels.py --vcf path/to/cohort.ann.vcf.gz \
@@ -309,12 +307,11 @@ def extract(args: argparse.Namespace) -> dict:
             "samples_file": str(args.samples) if args.samples else None,
             "exclude_bim": str(args.exclude_bim) if args.exclude_bim else None,
             "chromosome_map": mapping, "commands": commands,
-            "normalization": "Multiallelic splitting only; no realignment or reference-driven left alignment.",
+            "normalization": "Multiallelic splitting only.",
             "genotype_coding": "Target ALT dosage 0/1/2; other called ALTs non-target; partial/non-diploid calls missing.",
             "sample_order": sample_order,
             "allele_definition": "Sequence REF/ALT containing A,C,G,T,N; unequal lengths; exact representation keys.",
             "position_definition": "Number of distinct original CHROM/POS pairs among written alleles.",
-            "extraction_filters": "No missingness, allele-frequency, or carrier-count filters applied during extraction.",
             "outputs": [str(path) for path in output_paths],
             "normalization_log": normalization_log.strip(),
         }

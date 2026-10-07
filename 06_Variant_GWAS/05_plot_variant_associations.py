@@ -2,8 +2,7 @@
 """Plot Manhattan and quantile–quantile summaries of additive log2-MIC GWAS.
 
 The manifest is the primary_scan_manifest.tsv produced by
-04_summarize_results.py. All eligible variants are plotted without rescaling
-their P values. Relative result paths are resolved against the manifest folder.
+04_summarize_results.py. All eligible variants are plotted. Relative result paths are resolved against the manifest folder.
 """
 
 from __future__ import annotations

@@ -10,7 +10,7 @@ while IFS= read -r sample; do
     need_file "$bam"; need_file "$bam.bai"
     no_output "$OUTDIR/depth/$sample"
     make_stage
-    # Default fragment-overlap handling is retained; no fast-mode approximation.
+    # Default fragment-overlap handling is retained.
     "$MOSDEPTH" --threads "$THREADS" --mapq "$MOSDEPTH_MAPQ" \
         "$STAGE/$sample" "$bam" 2> "$STAGE/mosdepth.log"
     need_file "$STAGE/$sample.mosdepth.summary.txt"

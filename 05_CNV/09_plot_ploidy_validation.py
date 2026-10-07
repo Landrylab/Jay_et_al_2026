@@ -281,7 +281,7 @@ def plot(samples, density, genome, facs, composition, event_counts, output_prefi
         fig.savefig(str(output_prefix) + "." + suffix, dpi=dpi, facecolor="white")
     plt.close(fig)
     report = {"samples": summaries, "FACS_reference": reference, "FACS_event_counts": event_counts,
-              "FACS_normalization": "All histogram bins; no renormalization to displayed range",
+              "FACS_normalization": "All histogram bins",
               "FACS_display_limits": [facs_min, facs_max, 0, facs_ymax], "CN_display_limits": [0, cn_max],
               "chromosome_layout": chromosome_layout,
               "composition_rows": 0 if composition is None else len(composition),

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Assess drug-matched FungAMR carriers in a study-selected phenotype cohort.
 
-This stage reads the full carrier catalogue without modifying it. Study exclusions
+This stage reads the full carrier catalogue. Study exclusions
 apply only to the phenotype cohort used for Figure 2b and its association tests.
 """
 import argparse
@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import scipy
 from scipy.stats import fisher_exact
+from fungamr_evidence import SIGNED_EVIDENCE_RULE
 
 
 TRAITS = {
@@ -111,14 +112,14 @@ def build_assessment(matches_path, phenotypes_path, metadata_path,
         cohort['included_in_assessment'] & cohort['has_any_nonmissing_phenotype']
     )
 
-    # Retain the existing high-confidence substitution definition. Carrier sets
+    # Input catalogue must already resolve signed evidence before +1/+2 filtering.
+    # Carrier sets
     # collapse repeated database evidence, alleles and genes to one isolate/drug.
     raw_match_rows = len(matches)
     matches['gene'] = matches['gene'].replace({'GSC1': 'FKS1'})
     scores = pd.to_numeric(matches['confidence_score'], errors='coerce')
     matches = matches.loc[
         scores.isin([1, 2]) & matches['mutation_found'].ne('V488I')
-        & ~(matches['gene'].eq('FKS1') & matches['antifungal'].str.casefold().eq('fluconazole'))
     ].copy()
     matches['antifungal_norm'] = matches['antifungal'].str.casefold()
     cells, gene_rows, metric_rows, isolate_rows, fisher_rows = [], [], [], [], []
@@ -225,6 +226,7 @@ def build_assessment(matches_path, phenotypes_path, metadata_path,
         input_carrier_rows=raw_match_rows, qualifying_carrier_rows=len(matches),
         study_selection='Exact Study_clean labels; exclusions affect assessment only',
         carrier_rule='At least one qualifying drug-matched substitution; one record per isolate and drug',
+        signed_evidence_rule=SIGNED_EVIDENCE_RULE,
         phenotype_rule='R or 1 is resistant; S or 0 is susceptible; all other values omitted separately for each drug',
         absence_rule='No detected qualifying substitution; missing genotype calls do not count as carriers',
         heatmap_denominators='Mutation-present and mutation-absent isolates with an available phenotype',
@@ -235,7 +237,7 @@ def build_assessment(matches_path, phenotypes_path, metadata_path,
         non_evaluable_rule='Any zero row or column margin: odds ratio, p and q are unavailable',
         multiple_testing='Benjamini-Hochberg across evaluable drugs only',
         bh_family_size=int(evaluable.sum()),
-        interpretation='Unadjusted isolate-level associations; study and population structure are not modelled',
+        interpretation='See Methods, FungAMR annotation and phenotypic concordance.',
         versions={'numpy': np.__version__, 'pandas': pd.__version__, 'scipy': scipy.__version__},
         inputs={str(path): sha(path) for path in [matches_path, phenotypes_path, metadata_path]},
     )

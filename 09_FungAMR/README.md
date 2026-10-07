@@ -15,7 +15,7 @@ python 01_match_master_fungamr.py \
   --outdir /path/to/fungamr_source_data
 ```
 
-Python dependencies are NumPy, pandas and SciPy. Keep both scripts together. The master prefix supplies `.gene_annotations.tsv.gz`, `.dosage.npy` and `.samples.tsv`. The reference gene map supplies systematic identifiers and primary gene symbols. The FungAMR CSV or TSV retains its published column names. The phenotype TSV requires a unique `sample` column and `rbin_flu`, `rbin_vor`, `rbin_pos`, `rbin_cas`, `rbin_ani` and `rbin_mic`, encoded as R/S or 1/0. Other phenotype values are excluded separately for each drug. The metadata TSV requires unique `sample` identifiers and exact study labels in `Study_clean`; study assignments must agree if also present in the phenotype table. The matching script can omit `--metadata` when the phenotype table already supplies these assignments.
+Python dependencies are NumPy, pandas and SciPy. Keep both scripts and `fungamr_evidence.py` together. The master prefix supplies `.gene_annotations.tsv.gz`, `.dosage.npy` and `.samples.tsv`. The reference gene map supplies systematic identifiers and primary gene symbols. The FungAMR CSV or TSV retains its published column names. The phenotype TSV requires a unique `sample` column and `rbin_flu`, `rbin_vor`, `rbin_pos`, `rbin_cas`, `rbin_ani` and `rbin_mic`, encoded as R/S or 1/0. Other phenotype values are excluded separately for each drug. The metadata TSV requires unique `sample` identifiers and exact study labels in `Study_clean`; study assignments must agree if also present in the phenotype table. The matching script can omit `--metadata` when the phenotype table already supplies these assignments.
 
 `01_match_master_fungamr.py` always produces the full matching and carrier catalogue for the master genotype cohort, then calls `02_assess_fungamr.py` for the selected phenotype assessment. Study exclusions never filter reference records, allele matches, callability or the full carrier catalogue. Omit `--exclude-studies` to assess all studies.
 
@@ -34,19 +34,19 @@ The standalone assessment uses the phenotype table as its cohort; supply the phe
 
 ## Matching and counting
 
-- Retain *Candida albicans* database records with confidence scores 1 or 2 and a single amino-acid substitution.
+- Retain exact single-amino-acid *Candida albicans* records and resolve gene aliases before comparing evidence. Within each canonical reference gene, exact substitution and drug, retain the nonzero confidence score with the smallest absolute value; positive resistance evidence wins equal-magnitude ties. For example, +8 and −2 resolve to −2, whereas +2 and −2 resolve to +2. Only resolved scores +1 or +2 define high-confidence resistance markers.
 - Match each database substitution to its reference gene and exact protein consequence in a protein-changing allele-specific annotation. Gene aliases are resolved to reference symbols.
-- Apply the analysis exclusions for V488I and the FKS1–fluconazole combination.
+- Retain the V488I analysis exclusion. No gene–drug pair is excluded: FKS1–fluconazole evidence is assessed by the same signed-score and exact-single-substitution rules as other pairs. Evidence for a component within a multiple-substitution record remains a separate combination context and does not qualify the component as an exact single-substitution marker.
 - Count an isolate as a carrier when its complete genotype contains at least one copy of the matched alternate allele. Missing dosage remains unavailable and does not count as a detected substitution.
-- Consolidate duplicate evidence records for the same isolate, allele, gene, substitution and drug, retaining the strongest confidence score.
+- Consolidate duplicate evidence records for the same isolate, allele, gene, substitution and drug, retaining the resolved positive confidence score.
 - Exclude specified studies from the assessment cohort before calculating any phenotype counts, heatmap percentages, gene contributions or statistical tests. Each eligible isolate is counted once per drug, regardless of the number of matched mutations or evidence records.
 - Calculate each drug's heatmap using mutation-present or mutation-absent isolates as denominators. Mutation absence denotes no detected qualifying substitution, rather than proof of susceptibility.
 - Calculate gene bars against all resistant isolates with the corresponding phenotype. Carrier sets for different genes may overlap.
-- Test each drug's association between mutation presence and resistance with a two-sided Fisher exact test on `[[present_R, present_S], [absent_R, absent_S]]`. The reported odds ratio is the sample odds ratio returned by SciPy. Apply Benjamini–Hochberg correction across drugs with nonzero row and column margins; an empty margin makes the odds ratio, p value and adjusted p value unavailable. These are unadjusted isolate-level associations and do not model study or population structure.
+- Test each drug's association between mutation presence and resistance with a two-sided Fisher exact test on `[[present_R, present_S], [absent_R, absent_S]]`. The reported odds ratio is the sample odds ratio returned by SciPy. Apply Benjamini–Hochberg correction across drugs with nonzero row and column margins; an empty margin makes the odds ratio, p value and adjusted p value unavailable.
 
 ## Outputs
 
-The matching stage writes eligible database reference records, allele-level matches with canonical IDs, transcript IDs and protein consequences, allele callability and full isolate-level carrier records. `master_fungamr_audit.json` records input hashes and matching definitions.
+The matching stage writes `fungamr_signed_evidence_resolution.csv`, recording all eligible exact mutation–drug evidence groups, raw supporting scores/IDs, the resolved signed score and high-confidence resistance status. It also writes eligible database reference records, allele-level matches with canonical IDs, transcript IDs and protein consequences, allele callability and full isolate-level carrier records. `master_fungamr_audit.json` records input hashes and matching definitions.
 
 The assessment stage writes only these files:
 
@@ -65,7 +65,7 @@ Percentages for figure labels use decimal half-up rounding to one decimal place;
 
 ## Included input data
 
-`input_data.zip` contains carrier matches and a phenotype table with study labels for the Figure 2b assessment. Extract the files beside the scripts and run from this folder:
+`input_data.zip` contains the signed-evidence-resolved carrier matches (1,266 rows; updated 6 October 2026) and a phenotype table with study labels for the Figure 2b assessment. Extract the files beside the scripts and run from this folder:
 
 ```bash
 unzip input_data.zip
@@ -78,3 +78,7 @@ python3 02_assess_fungamr.py \
 ```
 
 Matching a new cohort with script 01 requires the annotated master catalogue and FungAMR database described above.
+
+The pre-update input archive and source outputs are retained under `outputs/fungamr_signed_score_update_20261006/backups/` in the project root. The input archive is an assessment snapshot; matching new variants requires the full database and master catalogue.
+
+On 6 October 2026, the FKS1–fluconazole pair exclusion was removed. Four exact database pairs are now represented in the signed-resolution table, but none resolves to +1 or +2; the high-confidence carrier snapshot and assessment results are unchanged. The immediately preceding files are retained under `outputs/fungamr_fks1_rule_removal_20261006/backups/`.

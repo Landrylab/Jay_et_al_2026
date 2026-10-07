@@ -12,12 +12,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from fungamr_evidence import best_signed_score, is_exact_single_substitution, SIGNED_EVIDENCE_RULE
 
 AA3 = dict(zip('Ala Arg Asn Asp Cys Gln Glu Gly His Ile Leu Lys Met Phe Pro Ser Thr Trp Tyr Val Ter Sec Pyl'.split(), 'ARNDCQEGHILKMFPSTWYV*UO'))
 PROTEIN_EFFECTS = {'missense_variant', 'stop_gained', 'stop_lost', 'start_lost'}
 GENE_ALIASES = {'CYP51': 'ERG11', 'CYP51A': 'ERG11', 'FKS': 'FKS1', 'GSC1': 'FKS1', 'SQUALENE EPOXIDASE': 'ERG1'}
 EXCLUDED_MUTATIONS = {'V488I'}
-EXCLUDED_PAIRS = {('FKS1', 'Fluconazole')}
 
 
 def short_protein_change(value):
@@ -54,25 +54,42 @@ def main():
     gene_symbol = genes.set_index('gene_id')['gene_symbol'].to_dict()
     database = pd.read_csv(args.fungamr, sep=None, engine='python', dtype=str).fillna('')
     lookup = defaultdict(list)
-    db_rows = []
+    evidence_groups = defaultdict(list)
     for row in database.to_dict('records'):
         score = pd.to_numeric(row['confidence score'], errors='coerce')
         mutation = row['mutation'].strip().upper()
-        if row['species'].strip().upper() != 'CANDIDA ALBICANS' or score not in {1, 2}:
+        if row['species'].strip().upper() != 'CANDIDA ALBICANS' or pd.isna(score) or not np.isfinite(score) or score == 0:
             continue
-        if row['mutation_type'].upper() not in {'SNP', 'SNPS'} or not re.fullmatch(r'[A-Z*]\d+[A-Z*]', mutation):
+        if not is_exact_single_substitution(row):
             continue
         symbols = {GENE_ALIASES.get(v.strip().upper(), v.strip().upper()) for field in ['gene or protein name', 'ortho_homolog'] for v in re.split(r'[,;/&]+', row[field])}
         gene_ids = {by_symbol[v] for v in symbols if v in by_symbol}
         if not gene_ids:
-            raise ValueError(f"Unmapped FungAMR gene: {row['gene or protein name']} / {row['ortho_homolog']}")
+            if score in {1, 2}:
+                raise ValueError(f"Unmapped FungAMR gene: {row['gene or protein name']} / {row['ortho_homolog']}")
+            continue
         for gene_id in gene_ids:
             symbol = gene_symbol[gene_id]
-            if mutation in EXCLUDED_MUTATIONS or (symbol, row['drug']) in EXCLUDED_PAIRS:
+            if mutation in EXCLUDED_MUTATIONS:
                 continue
             record = dict(gene_id=gene_id, gene=symbol, mutation_found=mutation, confidence_score=int(score), antifungal=row['drug'], fungamr_gene=row['gene or protein name'], fungamr_id=row['ID'], pubmedid=row['pubmedid'], first_author=row['first author name'], year=row['year'], strongest_resistance_evidence=row['Strongest resistance evidence reported'])
-            lookup[(gene_id, mutation)].append(record)
-            db_rows.append(record)
+            evidence_groups[(gene_id, mutation, row['drug'].casefold())].append(record)
+    db_rows = []
+    resolution = []
+    for (gene_id, mutation, drug), records in sorted(evidence_groups.items()):
+        winning_score = best_signed_score(record['confidence_score'] for record in records)
+        qualifies = winning_score in {1, 2}
+        resolution.append(dict(gene_id=gene_id, gene=gene_symbol[gene_id],
+                               mutation_found=mutation, antifungal=records[0]['antifungal'],
+                               evidence_scores=';'.join(map(str, sorted({r['confidence_score'] for r in records}))),
+                               resolved_score=winning_score, high_confidence_resistance=qualifies,
+                               fungamr_ids=';'.join(r['fungamr_id'] for r in records)))
+        if qualifies:
+            for record in records:
+                if record['confidence_score'] == winning_score:
+                    lookup[(gene_id, mutation)].append(record)
+                    db_rows.append(record)
+    pd.DataFrame(resolution).to_csv(out / 'fungamr_signed_evidence_resolution.csv', index=False)
     pd.DataFrame(db_rows).to_csv(out / 'fungamr_high_confidence_reference_records.csv', index=False)
     candidates = []
     seen = set()
@@ -115,7 +132,7 @@ def main():
         args.metadata or args.phenotypes, args.exclude_studies, out,
         sample_ids=samples,
     )
-    audit = dict(master_shape=list(dosage.shape), high_confidence_database_records=len(db_rows), matched_alleles=int(candidate_df.variant_id.nunique()), matched_protein_changes=int(candidate_df[['gene','mutation_found']].drop_duplicates().shape[0]), carrier_drug_rows=len(matches), carrier_rule='Called dosage > 0 for the specified alternate allele', confidence_scores=[1,2], mutation_scope='Exact single amino-acid substitutions in protein-changing allele-specific annotations', excluded_mutations=sorted(EXCLUDED_MUTATIONS), excluded_gene_drug_pairs=[list(v) for v in sorted(EXCLUDED_PAIRS)], absence_rule='No detected drug-matched high-confidence substitution; missing calls do not count as carriers', inputs={str(v):sha(v) for v in [args.fungamr,args.gene_map,args.phenotypes,Path(prefix+'.gene_annotations.tsv.gz'),Path(prefix+'.samples.tsv')]})
+    audit = dict(master_shape=list(dosage.shape), high_confidence_database_records=len(db_rows), matched_alleles=int(candidate_df.variant_id.nunique()), matched_protein_changes=int(candidate_df[['gene','mutation_found']].drop_duplicates().shape[0]), carrier_drug_rows=len(matches), carrier_rule='Called dosage > 0 for the specified alternate allele', confidence_scores=[1,2], signed_evidence_rule=SIGNED_EVIDENCE_RULE, signed_evidence_pair_count=len(resolution), mutation_scope='Exact single amino-acid substitutions in protein-changing allele-specific annotations', excluded_mutations=sorted(EXCLUDED_MUTATIONS), excluded_gene_drug_pairs=[], absence_rule='No detected drug-matched high-confidence substitution; missing calls do not count as carriers', inputs={str(v):sha(v) for v in [args.fungamr,args.gene_map,args.phenotypes,Path(prefix+'.gene_annotations.tsv.gz'),Path(prefix+'.samples.tsv')]})
     manifest = args.master_prefix.parent / 'master_SHA256SUMS'
     if manifest.exists():
         checksums = {line.split(None, 1)[1].strip(): line.split(None, 1)[0] for line in manifest.read_text().splitlines() if line.strip()}

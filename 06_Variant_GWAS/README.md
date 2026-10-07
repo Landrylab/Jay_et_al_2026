@@ -48,7 +48,7 @@ GCTA MLMA fits an intercept, an additive target-ALT effect and a random genetic 
 
 ## Thresholds and plots
 
-A two-sided association P value is obtained from `(effect/SE)^2` under a one-degree-of-freedom chi-squared null. Within each drug, Bonferroni and suggestive cutoffs are 0.05/M and 1/M over all tested nuclear and mitochondrial SNP/indel alleles. QQ expected probabilities use `(rank−0.5)/M`. Lambda GC is the median P-derived chi-squared statistic divided by its theoretical null median (0.454936). P values are not rescaled.
+A two-sided association P value is obtained from `(effect/SE)^2` under a one-degree-of-freedom chi-squared null. Within each drug, Bonferroni and suggestive cutoffs are 0.05/M and 1/M over all tested nuclear and mitochondrial SNP/indel alleles. QQ expected probabilities use `(rank−0.5)/M`. Lambda GC is the median P-derived chi-squared statistic divided by its theoretical null median (0.454936).
 
 ```bash
 python3 05_plot_variant_associations.py \
