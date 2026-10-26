@@ -44,6 +44,32 @@ The optional evidence table contains `drug`, `gene_id`, `display_symbol` and `ev
 
 References: [SnpEff](https://doi.org/10.4161/fly.19695), [GCTA](https://doi.org/10.1016/j.ajhg.2010.11.011), [LOCO mixed models](https://doi.org/10.1038/ng.2876), [genomic control](https://doi.org/10.1111/j.0006-341X.1999.00997.x).
 
+## Intermediate/SDD MIC-range sensitivity analysis
+
+`07_run_category_sensitivity.py` repeats the quantitative log₂ MIC gene GWAS after excluding measurements in the selected CLSI intermediate or susceptible-dose-dependent ranges: fluconazole >2 to ≤4 µg/ml, voriconazole >0.125 to ≤0.5 µg/ml, and caspofungin, micafungin and anidulafungin >0.25 to ≤0.5 µg/ml. These exclusions are inferred from recorded MICs. They use the next-higher-category rule for values between dilution categories in [CLSI M27M44S, third edition (2022), Table 1](https://clsi.org/media/osthhxax/m27m44sed3e_sample.pdf).
+
+Two analyses separate sample exclusion from gene-marker composition. `fixed` retains the original variants assigned to each gene and subsets the original carrier indicators. `rebuilt` reapplies the ≤5% variant-carrier criterion in the reduced drug-specific cohort. Each analysis tests genes with both carriers and called noncarriers and updates the multiple-testing thresholds using its tested gene count. Both retain the original log₂ MIC values and full-cohort-standardized nuclear GRMs, with LOCO adjustment for nuclear genes and the full nuclear GRM for mitochondrial genes. Variance components are refitted for each reduced cohort.
+
+```bash
+python3 07_run_category_sensitivity.py prepare \
+  --drugs fluconazole voriconazole caspofungin micafungin anidulafungin \
+  --original-root path/to/original_gene_GWAS \
+  --mic-metadata path/to/all_metadata.tsv \
+  --master-prefix path/to/cohort1153.snps_indels.master \
+  --catalog path/to/selected_gene_variants.tsv.gz \
+  --gene-map path/to/gene_map.tsv \
+  --loco-manifest path/to/loco_manifest.tsv \
+  --gcta path/to/gcta64 --threads 2 \
+  --outdir path/to/gene_GWAS_category_sensitivity
+python3 07_run_category_sensitivity.py run \
+  --outdir path/to/gene_GWAS_category_sensitivity
+python3 08_compare_category_sensitivity.py \
+  --source-root path/to/original_gene_GWAS \
+  --analysis-root path/to/gene_GWAS_category_sensitivity
+```
+
+The runner first reproduces the original fluconazole scan as a control, then writes both sensitivity analyses to separate directories. The comparison exports gene ranks, P values, carrier effects and counts, top-20 overlap, and changes in Bonferroni and suggestive classifications. This assesses robustness to outcome-based sample exclusion in the quantitative GWAS. Posaconazole retains its original cohort as the reference outside these selected exclusion ranges.
+
 ## Included input data
 
 `input_data.zip` contains gene-association values, highlight annotations and reference chromosome lengths for the Manhattan and QQ panels. Run from this directory:

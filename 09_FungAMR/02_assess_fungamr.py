@@ -14,7 +14,9 @@ import numpy as np
 import pandas as pd
 import scipy
 from scipy.stats import fisher_exact
-from fungamr_evidence import SIGNED_EVIDENCE_RULE
+from fungamr_evidence import (SIGNED_EVIDENCE_RULE, DEFAULT_CONFIDENCE_SCORES,
+                              EXCLUDED_GENE_MUTATIONS, validate_confidence_scores,
+                              is_excluded_substitution)
 
 
 TRAITS = {
@@ -64,7 +66,8 @@ def benjamini_hochberg(pvalues):
 
 
 def build_assessment(matches_path, phenotypes_path, metadata_path,
-                     exclude_studies=(), sample_ids=None):
+                     exclude_studies=(), sample_ids=None, confidence_scores=DEFAULT_CONFIDENCE_SCORES):
+    confidence_scores = validate_confidence_scores(confidence_scores)
     matches = pd.read_csv(matches_path, dtype=str)
     pheno = pd.read_csv(phenotypes_path, sep='\t', dtype=str)
     metadata = pd.read_csv(metadata_path, sep='\t', dtype=str)
@@ -103,7 +106,7 @@ def build_assessment(matches_path, phenotypes_path, metadata_path,
     unknown = set(exclusions) - set(metadata['Study_clean'].dropna())
     if unknown:
         raise ValueError(f'Excluded study labels were not found in metadata: {sorted(unknown)}')
-    binary = pheno[list(TRAITS.values())].replace({'R': '1', 'S': '0'})
+    binary = pheno[list(TRAITS.values())].replace({'R': '1', 'S': '0', 'R phenotype': '1', 'S phenotype': '0'})
     cohort['excluded_by_study'] = cohort['Study_clean'].isin(exclusions)
     cohort['included_in_assessment'] = ~cohort['excluded_by_study']
     cohort['n_nonmissing_drug_phenotypes'] = binary.isin(['0', '1']).sum(axis=1)
@@ -112,14 +115,16 @@ def build_assessment(matches_path, phenotypes_path, metadata_path,
         cohort['included_in_assessment'] & cohort['has_any_nonmissing_phenotype']
     )
 
-    # Input catalogue must already resolve signed evidence before +1/+2 filtering.
+    # Input catalogue must already resolve signed evidence before score filtering.
     # Carrier sets
     # collapse repeated database evidence, alleles and genes to one isolate/drug.
     raw_match_rows = len(matches)
     matches['gene'] = matches['gene'].replace({'GSC1': 'FKS1'})
     scores = pd.to_numeric(matches['confidence_score'], errors='coerce')
     matches = matches.loc[
-        scores.isin([1, 2]) & matches['mutation_found'].ne('V488I')
+        scores.isin(confidence_scores) & ~pd.Series(
+            [is_excluded_substitution(g, m) for g, m in matches[['gene', 'mutation_found']].itertuples(index=False, name=None)],
+            index=matches.index)
     ].copy()
     matches['antifungal_norm'] = matches['antifungal'].str.casefold()
     cells, gene_rows, metric_rows, isolate_rows, fisher_rows = [], [], [], [], []
@@ -157,10 +162,10 @@ def build_assessment(matches_path, phenotypes_path, metadata_path,
             metric[name] = 100 * n / d if d else np.nan
         metric_rows.append(metric)
         for state, phen, count, denominator in [
-            ('Present', 'Resistant', tp, present_n),
-            ('Present', 'Susceptible', fp, present_n),
-            ('Absent', 'Resistant', fn, absent_n),
-            ('Absent', 'Susceptible', tn, absent_n),
+            ('Present', 'R phenotype', tp, present_n),
+            ('Present', 'S phenotype', fp, present_n),
+            ('Absent', 'R phenotype', fn, absent_n),
+            ('Absent', 'S phenotype', tn, absent_n),
         ]:
             cells.append(dict(antifungal=drug, mutation=state, phenotype=phen,
                               count=count, denominator=denominator,
@@ -179,7 +184,7 @@ def build_assessment(matches_path, phenotypes_path, metadata_path,
                                      phenotype='R' if sample in resistant else 'S',
                                      mutation_present=sample in positive))
 
-        # Rows are mutation present/absent; columns are resistant/susceptible.
+        # Rows are database mutation present/absent; columns are R phenotype/S phenotype.
         # A zero row or column margin supplies no association information.
         margins = [present_n, absent_n, len(resistant), len(susceptible)]
         evaluable = min(margins) > 0
@@ -227,12 +232,16 @@ def build_assessment(matches_path, phenotypes_path, metadata_path,
         study_selection='Exact Study_clean labels; exclusions affect assessment only',
         carrier_rule='At least one qualifying drug-matched substitution; one record per isolate and drug',
         signed_evidence_rule=SIGNED_EVIDENCE_RULE,
-        phenotype_rule='R or 1 is resistant; S or 0 is susceptible; all other values omitted separately for each drug',
+        phenotype_rule='R or 1 denotes R phenotype; S or 0 denotes S phenotype; all other values omitted separately for each drug',
+        phenotype_display_labels={'R': 'R phenotype', 'S': 'S phenotype'},
+        legacy_column_terms={'resistant': 'R phenotype', 'susceptible': 'S phenotype'},
+        confidence_scores=list(confidence_scores),
+        excluded_gene_substitutions=[dict(gene=g, mutation=m) for g, m in sorted(EXCLUDED_GENE_MUTATIONS)],
         absence_rule='No detected qualifying substitution; missing genotype calls do not count as carriers',
         heatmap_denominators='Mutation-present and mutation-absent isolates with an available phenotype',
-        gene_bar_denominator='All resistant isolates with the corresponding phenotype in the selected cohort',
+        gene_bar_denominator='All isolates with R phenotype for the corresponding drug in the selected cohort',
         fisher_alternative='two-sided',
-        fisher_table_order={'rows': ['mutation_present', 'mutation_absent'], 'columns': ['resistant', 'susceptible']},
+        fisher_table_order={'rows': ['mutation_present', 'mutation_absent'], 'columns': ['R phenotype', 'S phenotype']},
         odds_ratio_definition='Sample odds ratio (present_R * absent_S) / (present_S * absent_R), as returned by scipy.stats.fisher_exact',
         non_evaluable_rule='Any zero row or column margin: odds ratio, p and q are unavailable',
         multiple_testing='Benjamini-Hochberg across evaluable drugs only',
@@ -245,9 +254,9 @@ def build_assessment(matches_path, phenotypes_path, metadata_path,
 
 
 def run_assessment(matches_path, phenotypes_path, metadata_path, exclude_studies,
-                   outdir, sample_ids=None):
+                   outdir, sample_ids=None, confidence_scores=DEFAULT_CONFIDENCE_SCORES):
     tables, audit = build_assessment(matches_path, phenotypes_path, metadata_path,
-                                     exclude_studies, sample_ids)
+                                     exclude_studies, sample_ids, confidence_scores)
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     for name, table in tables.items():
@@ -263,10 +272,12 @@ def main():
     parser.add_argument('--phenotypes', type=Path, required=True)
     parser.add_argument('--metadata', type=Path, required=True)
     parser.add_argument('--exclude-studies', nargs='*', default=[])
+    parser.add_argument('--confidence-scores', nargs='+', type=int, default=list(DEFAULT_CONFIDENCE_SCORES),
+                        help='Resolved positive FungAMR scores defining markers (default: 1 2 3 4)')
     parser.add_argument('--outdir', type=Path, required=True)
     args = parser.parse_args()
     tables, audit = run_assessment(args.matches, args.phenotypes, args.metadata,
-                                   args.exclude_studies, args.outdir)
+                                   args.exclude_studies, args.outdir, confidence_scores=args.confidence_scores)
     print(tables['panel_B_fisher_enrichment.csv'].to_string(index=False))
     print(json.dumps({key: audit[key] for key in [
         'excluded_studies', 'excluded_cohort_n', 'retained_cohort_n',

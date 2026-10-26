@@ -120,6 +120,34 @@ Variant positions and chromosome lengths are positive integers in base pairs, wi
 
 References: [Breiman (2001)](https://doi.org/10.1023/A:1010933404324), [scikit-learn](https://jmlr.org/papers/v12/pedregosa11a.html), and [impurity importance](https://proceedings.neurips.cc/paper/2013/hash/e3796ae838835da0b6f6ea37bcf8bcb7-Abstract.html).
 
+## Fluconazole SDD sensitivity analysis
+
+`10_run_sdd_sensitivity.py` repeats the six prediction analyses after excluding isolates with fluconazole MIC >2 and ≤4 µg/ml. This range includes readings of 3 µg/ml that fall into the next dilution category. It intersects both the saved outer and inner partitions with the retained samples, preserving sample ordering, model seeds, candidate grids and the original feature definitions. Feature screening, imputation, PCA, hyperparameter tuning and threshold selection are refitted using the retained training samples.
+
+Supply the original analysis directory, its genotype caches and MIC metadata. The original analysis directory must contain `run_configuration.json`, saved outer and inner sample assignments, and held-out predictions. The MIC metadata require unique `sample` identifiers and a numeric `Fluconazole` column.
+
+```bash
+python3 10_run_sdd_sensitivity.py prepare \
+  --source-root path/to/original_RF \
+  --mic-metadata path/to/all_metadata.tsv \
+  --outdir path/to/RF_SDD_sensitivity
+python3 10_run_sdd_sensitivity.py work \
+  --outdir path/to/RF_SDD_sensitivity --only-input variant --jobs 1
+python3 10_run_sdd_sensitivity.py work \
+  --outdir path/to/RF_SDD_sensitivity --only-input gene --jobs 1
+python3 10_run_sdd_sensitivity.py work \
+  --outdir path/to/RF_SDD_sensitivity --only-input pc --jobs 1
+python3 10_run_sdd_sensitivity.py summarize \
+  --outdir path/to/RF_SDD_sensitivity
+python3 11_summarize_sdd_sensitivity.py \
+  --source-root path/to/original_RF \
+  --analysis-root path/to/RF_SDD_sensitivity
+```
+
+Workers claim and checkpoint individual outer folds, supporting concurrent execution and resumption. `--only-design`, `--fold-numbers` and `--max-folds` restrict a worker's scope. Use matching scientific-library versions for the original and sensitivity runs. Summaries pair the refitted predictions with original predictions evaluated on the identical retained test isolates, separating retraining effects from changes in test-cohort composition. Mean fold differences and repeat-level summaries describe this sensitivity comparison.
+
+The comparison script writes cohort and performance tables, paired changes by fold and repeat, background-specific metrics, PNG/PDF figures and an HTML/text report in `comparison/`. Its `--validate-baseline-only` option checks the cohort and archived fold metrics. `--reproduction-control` adds an independently rerun original-fold audit when supplied. It checks the Figure 4 cohort counts and six-model design explicitly.
+
 ## Included input data
 
 `input_data.zip` contains prediction results, gene importance and network annotations, and the supplementary figure source workbooks. Run from this directory:

@@ -1,6 +1,6 @@
 # Reproducibility Scripts
 
-This directory contains script bundles for paired-end read processing, variant processing, phylogenetic inference, population-structure analysis, LOH detection, ploidy and copy-number analysis, variant and gene-level mixed-model association, and WGS machine learning. The numbered scripts are the public entry points. The `helpers/` folders contain supporting functions.
+This directory contains script bundles for paired-end read processing, variant processing, phylogenetic inference, population-structure analysis, LOH detection, ploidy and copy-number analysis, variant and gene-level mixed-model association, WGS machine learning, and resistance-gene prioritization. The numbered scripts are the public entry points. The `helpers/` folders contain supporting functions.
 
 Input paths are supplied through command-line arguments or environment variables. Example placeholders use the following generic file names:
 
@@ -17,18 +17,19 @@ No external database or connector access is required. Command-line tools such as
 - `02_Variant_calling_and_filtering/`: per-chromosome GATK gVCF calling, joint genotyping, cohort-level SNP filtering, and sequence-indel extraction with explicit allele and genotype representation.
 - `03_Phylogeny_and_population_structure/`: VCF-to-PHYLIP conversion, IQ-TREE inference, MAF and LD filtering, PCA, clustering, and submission-table exports.
 - `04_LOH/`: fixed-window heterozygous-SNP counting, nuclear LOH tract detection, phylogenetic-neighbor sharing, clade-level region resolution and submission-table exports.
-- `05_CNV/`: GC- and chromosome-end-bias correction, joint read-depth and allele-fraction segmentation, baseline-ploidy and integer-copy-number assignment, final manual-call reconciliation, diploid chromosome-event summaries and Source Data export.
+- `05_CNV/`: GC- and chromosome-end-bias correction, joint read-depth and allele-fraction segmentation, baseline-ploidy and integer-copy-number assignment, final manual-call reconciliation, diploid chromosome-event summaries, flow-cytometry heatmaps and Source Data export. The supplied cohort assignments incorporate the confirmed BL042 3N call.
 - `06_Variant_GWAS/`: drug-specific filtering of the shared SNP/indel master, a common nuclear SNP panel shared with population PCs, full and chromosome-excluded relatedness matrices, additive log2-MIC association with GCTA MLMA, multiple-testing thresholds, Manhattan plots and Q–Q diagnostics.
 - `07_Gene_level_variant_GWAS/`: rare-variant carrier indicators from the shared annotated master, quantitative MIC association using the shared relatedness matrices, carrier-effect summaries, and nuclear and mitochondrial gene-level Manhattan and Q–Q plots.
 - `08_WGS_machine_learning/`: variant, gene-level variant and training-derived PC inputs; random forests with inner tuning and threshold selection under stratified or genetic-cluster-grouped validation; within-group gene importance; prediction and genomic-importance plots.
 - `09_FungAMR/`: allele-specific matching of the standardized master to curated resistance substitutions, drug-matched carrier classifications, and Figure 2b source tables.
 - `10_VEP_FungAMR_ML/`: the Figure 6 notebook and accompanying VEP/FungAMR input files.
+- `11_prioritizing_genes/`: the Extended Data Figure 10 gene-enrichment screen, adjustment for co-carried genes, and individual-variant follow-up, with prepared inputs and validation against the reported results.
 
 No absolute personal paths are embedded in the shareable scripts. Repository-specific defaults may be overridden with the documented environment variables.
 
 ## Included input data
 
-Folders 01–09 provide `input_data.zip` archives containing reference files or prepared numeric inputs. Extract an archive beside its scripts and run the commands in that folder's README from the same folder. Input filenames are relative to that working folder. Folder 10 retains its original input archives. Sequencing reads, BAMs and full genotype matrices are supplied separately for upstream analyses.
+Folders 01–09 and 11 provide `input_data.zip` archives containing reference files or prepared numeric inputs. Extract an archive beside its scripts and run the commands in that folder's README from the same folder. Input filenames are relative to that working folder. Folder 10 retains its original input archives. Sequencing reads, BAMs and full genotype matrices are supplied separately for upstream analyses.
 
 ## Figures from numeric source data
 

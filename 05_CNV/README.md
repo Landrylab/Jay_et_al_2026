@@ -115,32 +115,45 @@ Ten-kb aggregation requires at least 70% of available, called 1-kb bins to suppo
 
 ## Ploidy-validation figure
 
-`09_plot_ploidy_validation.py` draws one row per supplied isolate, with allele-fraction density, absolute copy number above minor-allele fraction, and a FACS histogram against a supplied reference recording. An optional final panel shows chromosome-specific aneuploidy composition. The command reads prepared numerical values. Install the plotting dependencies listed in `../plotting_requirements.txt`.
+`09_plot_ploidy_validation.py` draws the genomic examples, a flow-cytometry heatmap of every supplied recording, and an optional chromosome-specific aneuploidy composition panel. The current four genomic examples occupy panels a–d, the heatmap is panel e, and composition is panel f. Install the dependencies in `../plotting_requirements.txt`.
 
 ```bash
 python3 09_plot_ploidy_validation.py \
-  --source path/to/ploidy_source_data.xlsx \
-  --reference-sample REFERENCE_SAMPLE \
+  --source path/to/figure_inputs \
   --output-prefix path/to/plots/ploidy_validation
 ```
 
-`--source` accepts a workbook containing the named Excel Tables below, or a directory containing files named after those tables with `.tsv`, `.csv`, `.tsv.gz` or `.csv.gz` extensions. Each table can instead be supplied separately through `--samples`, `--densities`, `--genome`, `--facs` and `--composition`. Column names are case sensitive. Tables can be stacked on a worksheet; their positions and worksheet names do not affect loading.
+`--source` accepts a directory of the named CSV/TSV tables below, a workbook containing those named tables, or the current submission workbook. The current workbook adapter reads the genomic named tables and the three headed sections on `Flow cytometry and composition`; it does not require named tables on that sheet. Individual CSV/TSV inputs may be supplied with `--samples`, `--densities`, `--genome`, `--flow-wells` (alias `--wells`), `--flow-bins` and `--composition`.
 
-| Named table | Required columns | Row definition |
+| Table | Required columns | Row definition |
 | --- | --- | --- |
-| `ED3Samples` | `Panel`, `Isolate`, `Assigned ploidy (N)` | One isolate and positive integer ploidy per unique panel. Optional `Display label` and `FACS sample` columns control labels and recording matching. |
-| `ED3Densities` | `Panel`, `Allele fraction`, `REF density`, `ALT density` | One supplied curve coordinate per panel and allele fraction. Allele fractions span 0–1; densities are nonnegative and retain their original normalization and smoothing. |
-| `ED3GenomeBins` | `Panel`, `Chromosome`, `Bin start (bp)`, `Bin end (bp)`, `Absolute copy number`, `Median minor AF` | One nonoverlapping genomic bin. Starts are zero-based and ends exclusive. CN is already on the assigned absolute-ploidy scale. Minor AF may be blank; otherwise it must lie in 0–0.5. |
-| `ED3FACS` | `Sample`, `Bin start (a.u.)`, `Bin end (a.u.)`, `Events`, `Events (%)` | One fluorescence bin per recording. All recordings share contiguous bin edges. Counts are integers; percentages must equal 100 times the bin count divided by the sum over every supplied bin for that recording. |
-| `ED3Composition` | `Chromosome`, `Aneuploidy type`, `Copy number`, `Isolates`, `Chromosome denominator`, `Aneuploid isolates (%)` | One chromosome/type/CN category. Type is `whole chromosome` or `segmental`; category counts sum to the chromosome denominator, and percentages use that denominator. |
+| `ED3Samples` | `Panel`, `Isolate`, `Assigned ploidy (N)` | One genomic example per panel. Optional `Display label` and `Flow well` columns override labels and exact cohort-sample matching. An empty `Flow well` means no flow recording. |
+| `ED3Densities` | `Panel`, `Allele fraction`, `REF density`, `ALT density` | One supplied density coordinate. Original smoothing and normalization are retained. |
+| `ED3GenomeBins` | `Panel`, `Chromosome`, `Bin start (bp)`, `Bin end (bp)`, `Absolute copy number`, `Median minor AF` | One nonoverlapping genomic bin. Starts are zero-based and ends exclusive. CN is already on the assigned absolute-ploidy scale. Minor AF may be missing. |
+| `ED3FlowWells` | `sample`, `well`, `recorded_ploidy`, `group`, `cohort_sample`, `control_strain`, `events` | One recording. `group` is `Cohort isolates` or `Reference controls`. Cohort rows have unique `cohort_sample` values; reference rows have `control_strain` instead. `recorded_ploidy` uses labels such as `2N`. Optional `display_label` controls the complete isolate-name display. |
+| `ED3FlowBins` | `well`, `bin_start`, `bin_end`, `events`, `percent_of_all_events` | One fluorescence bin per recording. All recordings must have matching, contiguous bin edges. Counts sum to the well's event total; percentages use all recorded events. |
+| `ED3Composition` | `Chromosome`, `Aneuploidy type`, `Copy number`, `Isolates`, `Chromosome denominator`, `Aneuploid isolates (%)` | One chromosome/type/CN category. Types are `whole chromosome` and `segmental`. Category counts sum to each chromosome's denominator. |
 
-Use `--no-composition` when the final panel is not needed. The FACS table must contain the identifier passed to `--reference-sample`. An explicit `FACS sample` value in the sample table takes precedence; a blank value marks an unavailable sample. Alternatively, `--facs-map path/to/mapping.tsv` supplies columns `Panel` and `FACS sample` for every panel. Without an explicit mapping, exact isolate identifiers are matched first, followed by the identifier prefix before the first underscore. Ambiguous matches and unused non-reference recordings are rejected. Unmatched isolates display “Sample not available for testing”; `--unavailable-text` changes that text.
+Heatmap rows are ordered by increasing recorded ploidy, with cohort isolates followed by controls of the same ploidy. Supplied order within those groups is retained. Genomic examples map to the heatmap by exact `Isolate`/`cohort_sample` equality, unless `Flow well` is supplied. Additional tested samples are retained even when they are not genomic examples. The plate-recorded heatmap ploidy is distinct from the genomic assignment; the plotter does not infer a new assignment from fluorescence.
 
-Default axes include every supplied CN value and fluorescence bin. Optional `--cn-max`, `--facs-min`, `--facs-max` and `--facs-ymax` set display limits without changing values or normalization. Record the relevant fluorescence channel and units with the source table; the command plots the supplied histogram without assuming a stain or instrument.
+Default display limits are 0–35,000 fluorescence units, 0–45% per bin on a log(1 + percentage) colour scale, and 0–8 absolute copies. `--flow-min`, `--flow-max`, `--colour-max` and `--cn-max` change display limits without changing normalization or source values. The plotter rejects a colour maximum that would clip an observed bin. The supplied full 0–100,000 range remains in the denominator when the fluorescence display is zoomed. No gating is added.
 
-Chromosomes follow their first appearance in the genomic table. The default `--chromosome-layout shared` gives every isolate the same offsets, based on the maximum supplied bin end for each chromosome across all panels. `--chromosome-layout per-panel` instead computes those maxima independently for each isolate, for source profiles originally drawn with isolate-specific chromosome extents. Neither option substitutes reference lengths for absent terminal bins.
+Chromosomes follow their source order. `--chromosome-layout per-panel` (default) uses each example's maximum supplied chromosome-bin ends; `shared` uses the maximum across examples. Neither mode substitutes reference lengths for absent terminal bins. Use `--no-composition` to omit the final panel.
 
-The output prefix produces a vector PDF, a PNG and a JSON summary with panel identities, genomic point counts, FACS event totals, display limits and omitted CN points above the display maximum. The supplied density coordinates and all finite genomic observations are used directly. No source workbook or analysis result is overwritten. Use an output prefix outside the input-data directories.
+Outputs are a vector PDF, a 600-dpi PNG (adjustable with `--dpi`) and a JSON summary of event totals, well order, group counts, genomic point counts, arrow positions and display settings. The four-example layout is 215 × 309 mm. `--font-family` accepts an installed font; the portable default is Matplotlib's DejaVu Sans. The figure contains no column titles. Source workbooks and analysis results are read-only. Keep output prefixes outside the input-data directories.
+
+## Confirmed cohort ploidy assignments
+
+`10_apply_reviewed_ploidy.py` applies explicit reviewed assignments to a cohort baseline table and recomputes ploidy totals. The supplied review records BL042 as 3N. The packaged cohort has 1,153 isolates: 1,127 2N, eight 3N, eleven 4N and seven 6N.
+
+```bash
+python3 10_apply_reviewed_ploidy.py \
+  --ploidy cohort_baseline_ploidy.tsv \
+  --review ploidy_reviews.tsv \
+  --output-dir results/reviewed_ploidy
+```
+
+This updates baseline metadata and produces reviewed-baseline, review and count tables. It does not rescale or relabel existing integer copy-number tracks. When an accepted baseline changes, rerun `04_segment_and_assign_copy_number.R` with `--baseline-ploidy`, then collate with `08_collate_reviewed_calls.py`. Submission export rejects a disagreement between an accepted baseline and an existing track's baseline. The genomic BL042 example already uses 3N; diploid-only chromosome-composition counts are unaffected by this correction.
 
 ## References
 
@@ -155,11 +168,18 @@ The output prefix produces a vector PDF, a PNG and a JSON summary with panel ide
 
 ## Included input data
 
-`input_data.zip` contains the unchanged ploidy-validation source workbook: allele-fraction densities, genomic copy number and minor-allele fractions, fluorescence histograms, sample labels and chromosome-level composition. Extract beside the scripts and run commands from this folder:
+`input_data.zip` contains the current submission source workbook, six plain CSV plotting tables, the written legend, the confirmed cohort baseline/review/count tables, and manifests with source hashes. The CSV plotting route reproduces all displayed row labels. The official workbook can also be read directly; its control strain names are retained when it has no optional `display_label` field.
 
 ```sh
 unzip input_data.zip
-python 09_plot_ploidy_validation.py --source Source_Data_Extended_Data_Fig_3.xlsx --reference-sample fRS1 --facs-min 0 --facs-max 35000 --facs-ymax 35 --cn-max 8 --chromosome-layout per-panel --output-prefix outputs/ploidy_validation
+python3 09_plot_ploidy_validation.py --source . --output-prefix outputs/ploidy_validation
+python3 10_apply_reviewed_ploidy.py --ploidy cohort_baseline_ploidy.tsv --review ploidy_reviews.tsv --output-dir outputs/reviewed_ploidy
 ```
 
-These are prepared plotting inputs for the validation figure.
+To use the workbook's numeric sections with the supplied species-qualified control labels:
+
+```sh
+python3 09_plot_ploidy_validation.py --source Source_Data_Extended_Data_Fig_3.xlsx --flow-wells ED3FlowWells.csv --output-prefix outputs/ploidy_validation
+```
+
+The flow-cytometry inputs contain all 23 tested members of the study cohort and four selected control recordings: fRS1 and fRS757 (2N), A48P1 (3N) and F18_P35 (4N). No 1N control is included. There are 27 recordings, 5,400 fluorescence-bin records and 116,351 recorded events. The bins are 500 units wide and cover 0–100,000 units. The acquisition channel, control species and experimental details are documented in `legend.md` and the source workbook. Later altered-concentration acquisitions are not pooled with these inputs.

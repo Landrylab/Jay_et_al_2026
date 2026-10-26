@@ -41,6 +41,9 @@ The calling, gathering, joint-genotyping and concatenation scripts use the exact
 4. `04_concatenate_joint_vcfs.sh`: concatenate chromosome-level cohort VCFs in reference order.
 5. `05_filter_cohort_vcf.sh`: subset the final cohort, trim absent alleles, decompose multiallelic records, recalculate cohort tags, and retain high-confidence biallelic SNPs.
 6. `06_extract_sequence_indels.py`: split sequence-indel ALT alleles without realignment, preserve parent-record identifiers, and export allele-specific PLINK genotypes, an allele manifest and an initial count summary. Sample order can follow the VCF, a sample list or a supplied FAM.
+7. `07_build_master_variants.py`: normalize the shared SNP/indel catalogue and retain original records, sample order and target-ALT dosages.
+8. `08_annotate_master_variants.py`: annotate the normalized catalogue and prepare shared allele-specific gene annotations.
+9. `09_audit_master_dosages.py`: independently compare deterministic sampled dosage rows with their original genotypes and source-record mappings.
 
 ## Variant representations
 
@@ -99,3 +102,15 @@ python3 08_annotate_master_variants.py \
 The final annotated VCF includes recalculated AC, AN, AF, NS, F_MISSING and MAF. Its accompanying dosage NPY has **variants as rows and isolates as columns** and int8 values -1/0/1/2. Row order follows `*.variants.tsv.gz`; column order follows `*.samples.tsv`. `selected_gene_variants.tsv.gz` and `gene_map.tsv` provide a common annotation interface for gene-level association and random-forest inputs. Downstream analyses calculate their own cohort-specific eligibility rules from these shared files. The SNP panel used for phylogenetic and population-structure figures remains a separate output of step 05.
 
 Dependencies for the shared catalogue are Python with NumPy and cyvcf2, BCFtools/HTSlib, Java and SnpEff.
+
+## Audit master dosages
+
+```bash
+python3 09_audit_master_dosages.py \
+  --prefix path/to/variants/cohort.snps_indels.master \
+  --out results/master_dosage_validation.json
+```
+
+The audit requires Python with NumPy and BCFtools. It uses the prefix's dosage matrix, sample table, variant metadata, normalization map, original-record table and indexed original-genotype BCF. `--original-vcf` can select an indexed original VCF/BCF with the same record and sample order; `--bcftools` selects the executable.
+
+By default, 4,000 rows are sampled without replacement using seed 20260923, or all rows when the catalogue is smaller. `--rows` and `--seed` configure this check. The audit verifies matrix dimensions and sample order, sampled allele counts and frequencies, original record ordinals, every original mapping for selected canonical alleles, and target-ALT dosages including partial missing and non-diploid calls. Duplicate source representations are checked separately. It records source-file checksums and exits with failure for a disagreement. A successful sampled audit does not assert that every unsampled genotype was checked. Source data are read without modification.

@@ -30,14 +30,20 @@ INPUT_LABELS = {"variant": "Variant based", "gene": "Gene-level variant based", 
 def run_analysis(x, features, samples, y, groups, input_type, design, destination,
                  n_splits=5, n_repeats=5, seed=42, inner_folds=3, n_estimators=500,
                  n_jobs=-1, top_k=10000, max_missing=0.10, chunk_size=8192,
-                 pc_grid=PC_GRID, selected_fold_numbers=None):
+                 pc_grid=PC_GRID, selected_fold_numbers=None, outer_splits=None,
+                 inner_splits_by_fold=None):
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=False)
     active_groups = groups if design == "clade_grouped" else None
     metrics, predictions, importances, tuning_rows, chosen_rows, selected_rows = [], [], [], [], [], []
-    for number, repeat, fold, train, test in repeated_outer_splits(y, n_splits, n_repeats, seed, design, active_groups):
+    partitions = (repeated_outer_splits(y, n_splits, n_repeats, seed, design, active_groups)
+                  if outer_splits is None else outer_splits)
+    for number, repeat, fold, train, test in partitions:
         if selected_fold_numbers is not None and number not in selected_fold_numbers:
             continue
+        train, test = np.asarray(train, dtype=int), np.asarray(test, dtype=int)
+        if not np.array_equal(np.sort(np.r_[train, test]), np.arange(len(y))):
+            raise ValueError("Outer training and test indices must partition all analysis samples")
         if len(np.unique(y[train])) != 2 or len(np.unique(y[test])) != 2:
             raise ValueError("Every outer fold must contain both classes for ROC-AUC evaluation")
         if active_groups is not None and set(active_groups[train]) & set(active_groups[test]):
@@ -45,10 +51,16 @@ def run_analysis(x, features, samples, y, groups, input_type, design, destinatio
         fold_seed = seed + number
         train_groups = active_groups[train] if active_groups is not None else None
         fold_info = {"repeat": repeat, "fold": fold, "fold_number": number}
+        explicit_inner = None
+        if inner_splits_by_fold is not None:
+            if number not in inner_splits_by_fold:
+                raise ValueError("Missing explicit inner partitions for outer fold " + str(number))
+            explicit_inner = inner_splits_by_fold[number]
         if input_type == "pc":
             x_train = np.asarray(x[train], dtype=np.float32)
             tuned = tune_pcs(x_train, y[train], train_groups, fold_seed, pc_grid=pc_grid,
-                             n_estimators=n_estimators, n_jobs=n_jobs, n_splits=inner_folds)
+                             n_estimators=n_estimators, n_jobs=n_jobs, n_splits=inner_folds,
+                             explicit_splits=explicit_inner)
             n_features = tuned["n_pcs"]
             projector = fit_pca_projector(x_train, n_features, fold_seed)
             z_train = projector.transform(x_train)
@@ -64,7 +76,8 @@ def run_analysis(x, features, samples, y, groups, input_type, design, destinatio
             selected = scores.variant_idx.to_numpy(dtype=int)
             z = np.asarray(x[:, selected], dtype=np.float32)
             tuned = tune_genotypes(z[train], y[train], train_groups, fold_seed,
-                                   n_estimators=n_estimators, n_jobs=n_jobs, n_splits=inner_folds)
+                                   n_estimators=n_estimators, n_jobs=n_jobs, n_splits=inner_folds,
+                                   explicit_splits=explicit_inner)
             clf = genotype_model(tuned["params"], fold_seed, n_estimators, n_jobs)
             clf.fit(z[train], y[train])
             probability = clf.predict_proba(z[test])[:, 1]
@@ -113,6 +126,8 @@ def run_analysis(x, features, samples, y, groups, input_type, design, destinatio
             "rf_grid": RF_GRID if input_type != "pc" else PC_RF_GRID,
             "pc_grid": pc_grid if input_type == "pc" else None,
             "completed_fold_numbers": [row["fold_number"] for row in metrics],
+            "outer_partition_source": "explicit supplied partitions" if outer_splits is not None else "seeded splitter",
+            "inner_partition_source": "explicit supplied partitions" if inner_splits_by_fold is not None else "seeded splitter",
             "versions": {"numpy": np.__version__, "pandas": pd.__version__,
                          "scipy": scipy.__version__, "scikit_learn": sklearn.__version__}}
     (destination / "run_info.json").write_text(json.dumps(info, indent=2) + "\n")

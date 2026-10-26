@@ -112,12 +112,30 @@ def inner_splits(y, groups, seed, n_splits=3):
         splits = list(StratifiedKFold(n_splits, shuffle=True, random_state=seed).split(np.zeros(len(y)), y))
     else:
         splits = list(StratifiedGroupKFold(n_splits, shuffle=True, random_state=seed).split(np.zeros(len(y)), y, groups))
+    return validate_inner_splits(y, groups, splits, n_splits)
+
+
+def validate_inner_splits(y, groups, splits, n_splits=3):
+    """Validate explicit inner partitions in the outer-training sample order."""
+    if len(splits) != n_splits:
+        raise ValueError("The number of supplied inner folds differs from n_splits")
+    checked, validation_counts = [], np.zeros(len(y), dtype=int)
     for train, valid in splits:
+        train, valid = np.asarray(train, dtype=int), np.asarray(valid, dtype=int)
+        combined = np.r_[train, valid]
+        if (train.ndim != 1 or valid.ndim != 1 or len(train) == 0 or len(valid) == 0
+                or len(combined) != len(y)
+                or not np.array_equal(np.sort(combined), np.arange(len(y)))):
+            raise ValueError("Inner training and validation indices must partition the outer training samples")
         if len(np.unique(y[train])) != 2 or len(np.unique(y[valid])) != 2:
             raise ValueError("Each inner training and validation fold must contain both phenotype classes")
         if groups is not None and set(groups[train]) & set(groups[valid]):
             raise ValueError("Group overlap in inner cross-validation")
-    return splits
+        validation_counts[valid] += 1
+        checked.append((train, valid))
+    if not np.all(validation_counts == 1):
+        raise ValueError("Every outer-training sample must occur in exactly one inner validation fold")
+    return checked
 
 
 def select_features(x, y, train_idx, top_k=10000, max_missing=0.10, chunk_size=8192):
@@ -172,8 +190,10 @@ def choose_threshold(y_true, probabilities):
     return float(candidates[selected]), float(scores[selected])
 
 
-def tune_genotypes(z_train, y, groups, seed, grid=RF_GRID, n_estimators=500, n_jobs=-1, n_splits=3):
-    splits = inner_splits(y, groups, seed, n_splits)
+def tune_genotypes(z_train, y, groups, seed, grid=RF_GRID, n_estimators=500, n_jobs=-1, n_splits=3,
+                   explicit_splits=None):
+    splits = (inner_splits(y, groups, seed, n_splits) if explicit_splits is None
+              else validate_inner_splits(y, groups, explicit_splits, n_splits))
     tuning, probabilities = [], []
     for candidate, params in enumerate(grid, 1):
         oof = np.full(len(y), np.nan)
@@ -196,8 +216,9 @@ def tune_genotypes(z_train, y, groups, seed, grid=RF_GRID, n_estimators=500, n_j
 
 
 def tune_pcs(x_train, y, groups, seed, pc_grid=PC_GRID, rf_grid=PC_RF_GRID,
-             n_estimators=500, n_jobs=-1, n_splits=3):
-    splits = inner_splits(y, groups, seed, n_splits)
+             n_estimators=500, n_jobs=-1, n_splits=3, explicit_splits=None):
+    splits = (inner_splits(y, groups, seed, n_splits) if explicit_splits is None
+              else validate_inner_splits(y, groups, explicit_splits, n_splits))
     limit = min(x_train.shape[1], min(len(train) for train, _ in splits))
     if not pc_grid or any(pc < 1 or pc > limit for pc in pc_grid):
         raise ValueError("Every candidate PC count must fit within each inner training matrix")

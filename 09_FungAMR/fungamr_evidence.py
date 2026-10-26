@@ -7,7 +7,7 @@ SIGNED_EVIDENCE_RULE = (
     'Within each species, canonical reference gene, exact mutation and drug, '
     'retain the nonzero score with the smallest absolute value; positive '
     'resistance evidence wins equal-magnitude ties. Resolve signed evidence '
-    'before restricting high-confidence resistance markers to scores +1 or +2.'
+    'before applying the selected positive confidence-score threshold.'
 )
 
 
@@ -42,3 +42,20 @@ def best_signed_score(scores):
         return None
     result = min(eligible, key=lambda value: (abs(value), value < 0))
     return int(result) if result.is_integer() else result
+
+
+DEFAULT_CONFIDENCE_SCORES = (1, 2, 3, 4)
+EXCLUDED_GENE_MUTATIONS = {('ERG11', 'D116E'), ('ERG11', 'V488I')}
+
+
+def validate_confidence_scores(scores):
+    """Accept original positive database scores; signed resolution precedes filtering."""
+    selected = tuple(sorted(set(scores)))
+    if not selected or any(not isinstance(v, int) or v < 1 or v > 8 for v in selected):
+        raise ValueError('Confidence scores must be integers from 1 to 8')
+    return selected
+
+
+def is_excluded_substitution(gene, mutation):
+    """Apply the marker definition documented in Methods."""
+    return (str(gene).upper(), str(mutation).upper()) in EXCLUDED_GENE_MUTATIONS

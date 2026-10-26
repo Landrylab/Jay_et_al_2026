@@ -70,6 +70,8 @@ def load_final_calls(args: argparse.Namespace):
     baseline = pd.to_numeric(ploidy[ploidy_column], errors="raise")
     if baseline.index.has_duplicates or (args.expected_samples is not None and len(baseline) != args.expected_samples):
         raise ValueError("Final ploidy table has duplicate samples or does not match --expected-samples.")
+    if baseline.empty or not baseline.isin([2, 3, 4, 6]).all():
+        raise ValueError("Final baseline assignments must be 2N, 3N, 4N or 6N.")
 
     chromosome_cn = pd.read_csv(args.chromosome_cn, sep="\t")
     chromosome_sample = resolve_column(
@@ -84,8 +86,15 @@ def load_final_calls(args: argparse.Namespace):
         manual_review, ("sample_id", "sample", "isolate")
     )
     manual_review = manual_review.set_index(manual_sample_column)
+    if manual_review.index.has_duplicates:
+        raise ValueError("Manual-review table has duplicate samples.")
     if not set(manual_review.index).issubset(baseline.index):
         raise ValueError("Manual-review table contains unknown isolates.")
+    if not manual_review.empty:
+        review_ploidy_column = resolve_column(manual_review, ("baseline_ploidy", "ploidy_hat", "ploidy"))
+        reviewed = pd.to_numeric(manual_review[review_ploidy_column], errors="raise")
+        if not reviewed.eq(baseline.loc[reviewed.index]).all():
+            raise ValueError("Final baseline differs from the accepted review; rerun sample calling with the reviewed baseline.")
     return ploidy, baseline, chromosome_cn, manual_review
 
 
@@ -247,6 +256,8 @@ def export_10kb_source_data(
         for sample in baseline.index:
             frame = normalize_bin_table(find_bin_file(bin_directory, sample))
             sample_baseline = float(baseline.loc[sample])
+            if sample in manual_samples and "track_baseline_ploidy" not in frame:
+                raise ValueError(f"{sample}: reviewed sample requires a track baseline; aggregate the reviewed segment calls before exporting.")
             if "track_baseline_ploidy" in frame and not np.all(frame["track_baseline_ploidy"] == sample_baseline):
                 raise ValueError(f"{sample}: 10-kb track and final baseline differ; aggregate reviewed segment calls.")
             for row in frame.itertuples(index=False):

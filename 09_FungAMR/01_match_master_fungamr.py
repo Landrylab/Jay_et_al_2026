@@ -12,12 +12,14 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from fungamr_evidence import best_signed_score, is_exact_single_substitution, SIGNED_EVIDENCE_RULE
+from fungamr_evidence import (best_signed_score, is_exact_single_substitution, SIGNED_EVIDENCE_RULE,
+                              DEFAULT_CONFIDENCE_SCORES, EXCLUDED_GENE_MUTATIONS,
+                              validate_confidence_scores, is_excluded_substitution)
 
 AA3 = dict(zip('Ala Arg Asn Asp Cys Gln Glu Gly His Ile Leu Lys Met Phe Pro Ser Thr Trp Tyr Val Ter Sec Pyl'.split(), 'ARNDCQEGHILKMFPSTWYV*UO'))
 PROTEIN_EFFECTS = {'missense_variant', 'stop_gained', 'stop_lost', 'start_lost'}
 GENE_ALIASES = {'CYP51': 'ERG11', 'CYP51A': 'ERG11', 'FKS': 'FKS1', 'GSC1': 'FKS1', 'SQUALENE EPOXIDASE': 'ERG1'}
-EXCLUDED_MUTATIONS = {'V488I'}
+CARRIER_FILENAME = 'fungamr_high_confidence_carriers.csv'
 
 
 def short_protein_change(value):
@@ -41,8 +43,11 @@ def main():
     parser.add_argument('--phenotypes', type=Path, required=True)
     parser.add_argument('--metadata', type=Path, help='Study metadata; defaults to the phenotype table')
     parser.add_argument('--exclude-studies', nargs='*', default=[], help='Exact Study_clean labels excluded from assessment only')
+    parser.add_argument('--confidence-scores', nargs='+', type=int, default=list(DEFAULT_CONFIDENCE_SCORES),
+                        help='Resolved positive FungAMR scores defining markers (default: 1 2 3 4)')
     parser.add_argument('--outdir', type=Path, required=True)
     args = parser.parse_args()
+    confidence_scores = validate_confidence_scores(args.confidence_scores)
     out = args.outdir
     out.mkdir(parents=True, exist_ok=True)
     prefix = str(args.master_prefix)
@@ -65,12 +70,12 @@ def main():
         symbols = {GENE_ALIASES.get(v.strip().upper(), v.strip().upper()) for field in ['gene or protein name', 'ortho_homolog'] for v in re.split(r'[,;/&]+', row[field])}
         gene_ids = {by_symbol[v] for v in symbols if v in by_symbol}
         if not gene_ids:
-            if score in {1, 2}:
+            if score in confidence_scores:
                 raise ValueError(f"Unmapped FungAMR gene: {row['gene or protein name']} / {row['ortho_homolog']}")
             continue
         for gene_id in gene_ids:
             symbol = gene_symbol[gene_id]
-            if mutation in EXCLUDED_MUTATIONS:
+            if is_excluded_substitution(symbol, mutation):
                 continue
             record = dict(gene_id=gene_id, gene=symbol, mutation_found=mutation, confidence_score=int(score), antifungal=row['drug'], fungamr_gene=row['gene or protein name'], fungamr_id=row['ID'], pubmedid=row['pubmedid'], first_author=row['first author name'], year=row['year'], strongest_resistance_evidence=row['Strongest resistance evidence reported'])
             evidence_groups[(gene_id, mutation, row['drug'].casefold())].append(record)
@@ -78,7 +83,7 @@ def main():
     resolution = []
     for (gene_id, mutation, drug), records in sorted(evidence_groups.items()):
         winning_score = best_signed_score(record['confidence_score'] for record in records)
-        qualifies = winning_score in {1, 2}
+        qualifies = winning_score in confidence_scores
         resolution.append(dict(gene_id=gene_id, gene=gene_symbol[gene_id],
                                mutation_found=mutation, antifungal=records[0]['antifungal'],
                                evidence_scores=';'.join(map(str, sorted({r['confidence_score'] for r in records}))),
@@ -120,7 +125,7 @@ def main():
             carriers.append({**entry, 'sample': samples[s], 'alternate_allele_dosage': int(values[s])})
     pd.DataFrame(callability).to_csv(out / 'master_fungamr_allele_callability.csv', index=False)
     matches = pd.DataFrame(carriers).sort_values(['sample', 'gene', 'mutation_found', 'antifungal', 'confidence_score', 'fungamr_id']).drop_duplicates(['sample', 'variant_id', 'gene', 'mutation_found', 'antifungal'])
-    matches.to_csv(out / 'fungamr_score_1_or_2_nonsynonymous_matches.csv', index=False)
+    matches.to_csv(out / CARRIER_FILENAME, index=False)
     # Full catalogue matching above is independent of study selection. Only the
     # phenotype assessment below uses the requested cohort exclusions.
     assessment_path = Path(__file__).with_name('02_assess_fungamr.py')
@@ -128,11 +133,11 @@ def main():
     assessment = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(assessment)
     tables, assessment_audit = assessment.run_assessment(
-        out / 'fungamr_score_1_or_2_nonsynonymous_matches.csv', args.phenotypes,
+        out / CARRIER_FILENAME, args.phenotypes,
         args.metadata or args.phenotypes, args.exclude_studies, out,
-        sample_ids=samples,
+        sample_ids=samples, confidence_scores=confidence_scores,
     )
-    audit = dict(master_shape=list(dosage.shape), high_confidence_database_records=len(db_rows), matched_alleles=int(candidate_df.variant_id.nunique()), matched_protein_changes=int(candidate_df[['gene','mutation_found']].drop_duplicates().shape[0]), carrier_drug_rows=len(matches), carrier_rule='Called dosage > 0 for the specified alternate allele', confidence_scores=[1,2], signed_evidence_rule=SIGNED_EVIDENCE_RULE, signed_evidence_pair_count=len(resolution), mutation_scope='Exact single amino-acid substitutions in protein-changing allele-specific annotations', excluded_mutations=sorted(EXCLUDED_MUTATIONS), excluded_gene_drug_pairs=[], absence_rule='No detected drug-matched high-confidence substitution; missing calls do not count as carriers', inputs={str(v):sha(v) for v in [args.fungamr,args.gene_map,args.phenotypes,Path(prefix+'.gene_annotations.tsv.gz'),Path(prefix+'.samples.tsv')]})
+    audit = dict(master_shape=list(dosage.shape), high_confidence_database_records=len(db_rows), matched_alleles=int(candidate_df.variant_id.nunique()), matched_protein_changes=int(candidate_df[['gene','mutation_found']].drop_duplicates().shape[0]), carrier_drug_rows=len(matches), carrier_rule='Called dosage > 0 for the specified alternate allele', confidence_scores=list(confidence_scores), signed_evidence_rule=SIGNED_EVIDENCE_RULE, signed_evidence_pair_count=len(resolution), mutation_scope='Exact single amino-acid substitutions in protein-changing allele-specific annotations', excluded_gene_substitutions=[dict(gene=g, mutation=m) for g, m in sorted(EXCLUDED_GENE_MUTATIONS)], excluded_gene_drug_pairs=[], absence_rule='No detected drug-matched high-confidence substitution; missing calls do not count as carriers', inputs={str(v):sha(v) for v in [args.fungamr,args.gene_map,args.phenotypes,Path(prefix+'.gene_annotations.tsv.gz'),Path(prefix+'.samples.tsv')]})
     manifest = args.master_prefix.parent / 'master_SHA256SUMS'
     if manifest.exists():
         checksums = {line.split(None, 1)[1].strip(): line.split(None, 1)[0] for line in manifest.read_text().splitlines() if line.strip()}
