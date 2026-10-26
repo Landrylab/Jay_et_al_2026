@@ -1,4 +1,3 @@
-# Reproducibility Scripts
 
 This directory contains script bundles for paired-end read processing, variant processing, phylogenetic inference, population-structure analysis, LOH detection, ploidy and copy-number analysis, variant and gene-level mixed-model association, WGS machine learning, and resistance-gene prioritization. The numbered scripts are the public entry points. The `helpers/` folders contain supporting functions.
 
@@ -29,7 +28,7 @@ No absolute personal paths are embedded in the shareable scripts. Repository-spe
 
 ## Included input data
 
-Folders 01–09 and 11 provide `input_data.zip` archives containing reference files or prepared numeric inputs. Extract an archive beside its scripts and run the commands in that folder's README from the same folder. Input filenames are relative to that working folder. Folder 10 retains its original input archives. Sequencing reads, BAMs and full genotype matrices are supplied separately for upstream analyses.
+Folders provide `input_data.zip` archives containing reference files or prepared numeric inputs. Extract an archive beside its scripts and run the commands in that folder's README from the same folder. Input filenames are relative to that working folder. Sequencing reads, BAMs and full genotype matrices are supplied separately for upstream analyses.
 
 ## Figures from numeric source data
 
